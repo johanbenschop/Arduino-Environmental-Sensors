@@ -1,0 +1,176 @@
+﻿<!DOCTYPE html>
+<html>
+  <head>
+    <!-- EXTERNAL LIBS-->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="https://www.google.com/jsapi"></script>
+
+    <!-- EXAMPLE SCRIPT -->
+    <script>
+
+      // onload callback
+      function drawChart() {
+
+        var public_key = 'KJJLA8gW20SNJy8JME8G';
+
+        // JSONP request
+        var jsonData = $.ajax({
+          url: 'https://data.sparkfun.com/output/' + public_key + '.json',
+          data: {page: 1},
+		  jsonp: 'callback',
+		  cache: true,
+          dataType: 'jsonp',
+        }).done(function (results) {
+		
+          var temp_data = new google.visualization.DataTable();
+		  temp_data.addColumn('datetime', 'Time');
+          temp_data.addColumn('number', 'Temperature');
+		  temp_data.addColumn('number', 'Heat Index');
+		  temp_data.addColumn('number', 'Radiator Temperature');
+		  
+		  var hum_data = new google.visualization.DataTable();
+		  hum_data.addColumn('datetime', 'Time');
+          hum_data.addColumn('number', 'Humidity');
+		  
+		  var ldr_data = new google.visualization.DataTable();
+		  ldr_data.addColumn('datetime', 'Time');
+          ldr_data.addColumn('number', 'LDR');
+		  ldr_data.addColumn('number', 'Illuminance');
+		  
+		  var dust_data = new google.visualization.DataTable();
+		  dust_data.addColumn('datetime', 'Time');
+          dust_data.addColumn('number', 'Dust Density');
+
+          $.each(results, function (i, row) {
+		    // load only data from the last 24 hours
+		    var date24 = new Date();
+			date24.setDate(date24.getDate()-1);
+			var date00 = new Date(row.timestamp);
+			
+			if (date24.getTime() > date00.getTime()) return;
+		  
+            temp_data.addRow([
+              date00,
+              parseFloat(row.temperature),
+			  heatindex(row.temperature, row.humidity),
+			  parseFloat(row.radiatortemp)
+            ]);
+			
+			hum_data.addRow([
+              date00,
+              parseFloat(row.humidity)
+            ]);
+			
+			ldr_data.addRow([
+              date00,
+              null, //parseFloat(row.ldr)-388,
+			  parseFloat(row.ambientlight)
+            ]);
+			
+			dust_data.addRow([
+              date00,
+              parseFloat(row.dust)
+            ]);
+			
+          });
+		  
+		  var formatter = new google.visualization.NumberFormat({ pattern: '#.## °C'});
+		  formatter.format(temp_data, 1);
+		  formatter.format(temp_data, 2);
+		  
+		  var formatter = new google.visualization.NumberFormat({ pattern: '#,##%'});
+		  formatter.format(hum_data, 1);
+		  
+		  var formatter = new google.visualization.NumberFormat({ pattern: '#.## lm/m2'});
+		  formatter.format(ldr_data, 2);
+		  
+		  var formatter = new google.visualization.NumberFormat({ pattern: '#.## µg/m3'});
+		  formatter.format(dust_data, 1);
+
+          var temp_chart = new google.visualization.LineChart($('#temp_chart').get(0));
+		  var hum_chart = new google.visualization.LineChart($('#hum_chart').get(0));
+		  var ldr_chart = new google.visualization.LineChart($('#ldr_chart').get(0));
+		  var dust_chart = new google.visualization.LineChart($('#dust_chart').get(0));
+
+          temp_chart.draw(temp_data, {
+            title: 'Temperature',
+			curveType: 'function',
+			vAxis: {format: '#.## °C'},
+			series: {
+             0: { color: '#2980b9' },
+             1: { color: '#8e44ad' },
+			 2: { color: '#FF0033' }
+            },
+			legend: { position: 'none' }
+          });
+		  
+		  hum_chart.draw(hum_data, {
+            title: 'Relative Humidity',
+			curveType: 'function',
+			vAxis: {format: '#,## RH'},
+			series: {
+             0: { color: '#16a085' }
+            },
+			legend: { position: 'none' }
+          });
+		  
+		  ldr_chart.draw(ldr_data, {
+            title: 'Illuminance',
+			curveType: 'function',
+			vAxis: {format: '#.## lux'},
+			series: {
+             0: { color: '#e67e22' }
+            },
+			legend: { position: 'none' }
+          });
+		  
+		   dust_chart.draw(dust_data, {
+            title: 'Dust Density',
+			curveType: 'function',
+			vAxis: {format: '#.## µg/m3'},
+			series: {
+             0: { color: '#27ae60' }
+            },
+			legend: { position: 'none' }
+          });
+
+        });
+
+      }
+
+      // load chart lib
+      google.load('visualization', '1', {
+        packages: ['corechart']
+      });
+
+      // call drawChart once Google charts is loaded
+      google.setOnLoadCallback(drawChart);
+	  
+	function heatindex(temp, rh)
+	{
+		var r=parseFloat(rh);	//relative humidity
+		var b=parseFloat(temp);	//temperature in Celsius
+		
+		if(b > 26.7) {
+			var t=b*(9/5) + 32;	//convert to Fahrenheit
+			var t2=Math.pow(t, 2);
+			var t3=Math.pow(t, 3);
+			var rh2=Math.pow(r, 2);
+			var rh3=Math.pow(r, 3);
+
+			var index =16.923+0.185212*t+5.37941*r-0.100254*t*r+ 0.941695e-2*t2+0.728898e-2*rh2+0.345372e-3*t2*r- 0.814971e-3*t*rh2+0.102102e-4*t2*rh2- 0.38646e-4*t3+0.291583e-4*rh3+0.142721e-5*t3*r+ 0.197483e-6*t*rh3-0.218429e-7*t3*rh2+ 0.843296e-9*t2*rh3-0.481975e-10*t3*rh3;
+			var m = 5/9*(index-32); //convert back to Celsius
+			return m; //heat index in Celsius
+		}
+	}
+	  
+    </script>
+
+  </head>
+  <body>
+    <div id="temp_chart" style="width: 100%;"></div>
+	<div id="hum_chart" style="width: 100%;"></div>
+	<div id="ldr_chart" style="width: 100%;"></div>
+	<div id="dust_chart" style="width: 100%;"></div>
+  </body>
+</html>
